@@ -86,6 +86,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
@@ -188,10 +189,11 @@
     </state>
     <state x="958" y="126" key="#com.intellij.ide.util.MemberChooser/0.0.1536.834@0.0.1536.834" timestamp="1576500489445" />
     <state x="1198" y="157" key="#com.intellij.ide.util.MemberChooser/0.0.1920.1040/-1920.0.1920.1040@0.0.1920.1040" timestamp="1578405099523" />
-    <state x="777" y="13" key="CommitChangelistDialog2" timestamp="1578311169658">
-      <screen x="0" y="0" width="1536" height="834" />
+    <state x="971" y="16" key="CommitChangelistDialog2" timestamp="1578410066054">
+      <screen x="0" y="0" width="1920" height="1040" />
     </state>
     <state x="777" y="13" key="CommitChangelistDialog2/0.0.1536.834@0.0.1536.834" timestamp="1578311169658" />
+    <state x="971" y="16" key="CommitChangelistDialog2/0.0.1920.1040/-1920.0.1920.1040@0.0.1920.1040" timestamp="1578410066054" />
     <state x="685" y="197" key="FileChooserDialogImpl" timestamp="1578327682337">
       <screen x="0" y="0" width="1920" height="1040" />
     </state>
@@ -241,6 +243,10 @@
       <screen x="0" y="0" width="1536" height="834" />
     </state>
     <state x="277" y="59" key="SettingsEditor/0.0.1536.834@0.0.1536.834" timestamp="1576329052719" />
+    <state x="552" y="254" key="Vcs.Push.Dialog.v2" timestamp="1578410074274">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="552" y="254" key="Vcs.Push.Dialog.v2/0.0.1920.1040/-1920.0.1920.1040@0.0.1920.1040" timestamp="1578410074274" />
     <state x="93" y="93" width="1350" height="648" key="com.intellij.history.integration.ui.views.FileHistoryDialog" timestamp="1576343914279">
       <screen x="0" y="0" width="1536" height="834" />
     </state>
