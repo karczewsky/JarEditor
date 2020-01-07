@@ -5,21 +5,13 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.stage.FileChooser;
-import javassist.ClassPool;
-import javassist.CtClass;
-import javassist.CtMethod;
-import javassist.NotFoundException;
+import javassist.*;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.ResourceBundle;
 import java.util.jar.JarEntry;
@@ -34,35 +26,37 @@ public class Controller implements Initializable {
     private TextField jarChoseField;
 
     @FXML
-    private ListView<String> packagesListContainer;
-    private ObservableList<String> packagesList;
+    private ListView<ClassWrapper> classesListContainer;
+    private ObservableList<ClassWrapper> classesList;
 
     @FXML
-    private ListView<String> methodListContainer;
-    private ObservableList<String> methodsList;
+    private ListView<MethodWrapper> methodsListContainer;
+    private ObservableList<MethodWrapper> methodsList;
+
+    @FXML
+    private ListView<ConstructorWrapper> constructorListContainer;
+    private ObservableList<ConstructorWrapper> contructorsList;
+
+    @FXML
+    private TextArea newMethodTextArea;
+    @FXML
+    private Button newMethodButton;
 
     @FXML
     private Label logLabel;
 
     private FileChooser fileChooser;
     private File selectedFile;
-    private ClassPool pool;
-    private URLClassLoader classLoader;
+    private ClassPool classPool;
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
-        fileChooser = new FileChooser();
+        // DEVELOPMENT CHANGES
+        jarChoseField.setText(getClass().getResource("/kalkulator.jar").getFile());
+        newMethodTextArea.setText("public void test() { System.out.println(\"New method printing stuff\"); }");
+        // END OF DEVELOPMENT CHANGES
 
-        fileChooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("JAR File", "*.jar"),
-                new FileChooser.ExtensionFilter("All", "*")
-        );
-
-        packagesList = FXCollections.observableArrayList();
-        packagesListContainer.setItems(packagesList);
-
-        methodsList = FXCollections.observableArrayList();
-        methodListContainer.setItems(methodsList);
+        initUIElements();
 
         jarChoseButton.setOnAction(actionEvent -> {
             Node source = (Node) actionEvent.getSource();
@@ -75,18 +69,23 @@ public class Controller implements Initializable {
         });
 
         jarChoseConfirm.setOnAction(actionEvent -> {
-            selectedFile = new File(jarChoseField.getText());
+            String filePathString = jarChoseField.getText().trim();
 
-            pool = ClassPool.getDefault();
+            if (filePathString.length() == 0)
+                return;
+
+            selectedFile = new File(filePathString);
+
+            classPool = ClassPool.getDefault();
 
             try {
-                classLoader = new URLClassLoader(new URL[]{selectedFile.toURI().toURL()});
-                pool.insertClassPath(selectedFile.getAbsolutePath());
+                classPool.insertClassPath(selectedFile.getAbsolutePath());
 
                 JarFile jarFile = new JarFile(selectedFile.getAbsoluteFile());
 
                 Iterator<JarEntry> it = jarFile.entries().asIterator();
 
+                classesList.clear();
                 while (it.hasNext()) {
                     JarEntry jarEntry = it.next();
                     String str = jarEntry.getRealName();
@@ -95,32 +94,80 @@ public class Controller implements Initializable {
                     if (str.endsWith(".class")) {
                         str = str.replace("/", ".");
                         str = str.replace(".class", "");
-                        packagesList.add(str);
-                        Class<?> c = classLoader.loadClass(str);
-                        System.err.println(Arrays.toString(c.getDeclaredMethods()));
+
+                        ClassWrapper classWrapper = new ClassWrapper(classPool, str);
+                        classesList.add(classWrapper);
                     }
                 }
-            } catch (NotFoundException | IOException | ClassNotFoundException e) {
+            } catch (NotFoundException | IOException e) {
                 e.printStackTrace();
             }
         });
 
-        packagesListContainer.getSelectionModel().selectedItemProperty().addListener(
-                (observableValue, oldVal, newVal) -> {
-                    try {
-                        CtClass ctClass = pool.get(newVal);
-                        methodsList.clear();
+        classesListContainer.getSelectionModel().selectedItemProperty().addListener(
+                (observableValue, oldVal, newVal) -> refreshUILists(newVal)
+        );
 
-                        for (CtMethod ctMethod : ctClass.getDeclaredMethods()) {
-                            methodsList.add(ctMethod.getName());
-                        }
-                    } catch (NotFoundException e) {
-                        e.printStackTrace();
-                    }
-                });
+        newMethodButton.setOnAction(actionEvent -> {
+            String newMethodText = newMethodTextArea.getText();
+
+            ClassWrapper classWrapper = classesListContainer.getSelectionModel().getSelectedItem();
+            CtClass ctClass = classWrapper.getCtClass();
+
+            try {
+                CtMethod ctMethod = CtNewMethod.make(newMethodText, ctClass);
+
+                CtConstructor ctConstructor = CtNewConstructor.make("public " + ctClass.getSimpleName() + "() {}", ctClass);
+
+                ctClass.addConstructor(ctConstructor);
+
+                ctClass.addMethod(ctMethod);
+
+                Class<?> c = ctClass.toClass();
+
+                ctClass.defrost();
+
+                Object o = c.getDeclaredConstructor(new Class[]{int.class, int.class}).newInstance(4, 4);
+
+                Object a = c.getMethod("dodawanie").invoke(o);
+
+                System.err.println(a);
+
+            } catch (Exception e) {
+                logMessage(e.toString());
+            }
+
+            refreshUILists(classWrapper);
+        });
+    }
+
+    private void initUIElements() {
+        fileChooser = new FileChooser();
+
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("JAR File", "*.jar"),
+                new FileChooser.ExtensionFilter("All", "*")
+        );
+
+        classesList = FXCollections.observableArrayList();
+        classesListContainer.setItems(classesList);
+
+        methodsList = FXCollections.observableArrayList();
+        methodsListContainer.setItems(methodsList);
+
+        contructorsList = FXCollections.observableArrayList();
+        constructorListContainer.setItems(contructorsList);
     }
 
     private void logMessage(String message) {
         logLabel.setText(message);
+    }
+
+    private void refreshUILists(ClassWrapper classWrapper) {
+        methodsList.clear();
+        methodsList.setAll(classWrapper.getMethods());
+
+        contructorsList.clear();
+        contructorsList.setAll(classWrapper.getConstructors());
     }
 }
