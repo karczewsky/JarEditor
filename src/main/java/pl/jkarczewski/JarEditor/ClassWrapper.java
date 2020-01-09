@@ -7,8 +7,13 @@ import java.util.List;
 
 public class ClassWrapper {
     private CtClass ctClass;
+    private Class<?> cl;
+    private boolean isGenerated;
 
     ClassWrapper(ClassPool cp, String name) {
+        cl = null;
+        isGenerated = false;
+
         try {
             ctClass = cp.getCtClass(name);
         } catch (NotFoundException e) {
@@ -23,6 +28,19 @@ public class ClassWrapper {
 
     public CtClass getCtClass() {
         return ctClass;
+    }
+
+    public Class<?> getCl() {
+        return cl;
+    }
+
+    public boolean getIsGenerated() {
+        return isGenerated;
+    }
+
+    public void generateClass() throws CannotCompileException {
+        cl = ctClass.toClass();
+        isGenerated = true;
     }
 
     public List<MethodWrapper> getMethods() {

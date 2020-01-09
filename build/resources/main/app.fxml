@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane prefHeight="716.0" prefWidth="854.0" xmlns="http://javafx.com/javafx/11.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pl.jkarczewski.JarEditor.Controller">
+<AnchorPane prefHeight="716.0" prefWidth="875.0" xmlns="http://javafx.com/javafx/11.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pl.jkarczewski.JarEditor.Controller">
     <children>
         <VBox layoutX="14.0" layoutY="14.0" prefHeight="671.0" prefWidth="854.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
             <children>
@@ -61,10 +61,19 @@
                               <Font size="17.0" />
                            </font>
                         </Label>
-                        <ListView fx:id="constructorListContainer" layoutX="-1.0" layoutY="26.0" prefHeight="248.0" prefWidth="198.0" />
+                        <ListView fx:id="constructorsListContainer" layoutX="-1.0" layoutY="26.0" prefHeight="248.0" prefWidth="198.0" />
                      </children>
                   </Pane>
-                  <Pane prefHeight="273.0" prefWidth="192.0" />
+                  <Pane prefHeight="273.0" prefWidth="199.0">
+                     <children>
+                        <Button fx:id="invokeMethodButton" layoutX="5.0" layoutY="81.0" mnemonicParsing="false" text="Wywołaj metodę" />
+                        <Label layoutX="5.0" layoutY="1.0" prefHeight="26.0" prefWidth="118.0" text="Akcje:">
+                           <font>
+                              <Font size="17.0" />
+                           </font>
+                        </Label>
+                        <Button fx:id="generateClassButton" layoutX="5.0" layoutY="35.0" mnemonicParsing="false" text="Wygeneruj zmodyfikowaną klasę" />
+                     </children></Pane>
                </children>
             </HBox>
             <HBox prefHeight="302.0" prefWidth="854.0">
