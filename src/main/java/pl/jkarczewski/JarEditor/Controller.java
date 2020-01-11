@@ -11,6 +11,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Pair;
 import javassist.*;
 
 import java.io.File;
@@ -140,22 +141,11 @@ public class Controller implements Initializable {
             try {
                 CtMethod ctMethod = CtNewMethod.make(newMethodText, ctClass);
 
-//                CtConstructor ctConstructor = CtNewConstructor.make("public " + ctClass.getSimpleName() + "() {}", ctClass);
+                CtConstructor ctConstructor = CtNewConstructor.make("public " + ctClass.getSimpleName() + "() {}", ctClass);
 
-//                ctClass.addConstructor(ctConstructor);
+                ctClass.addConstructor(ctConstructor);
 
                 ctClass.addMethod(ctMethod);
-
-//                Class<?> c = ctClass.toClass();
-//
-//                ctClass.defrost();
-//
-//                Object o = c.getDeclaredConstructor(new Class[]{int.class, int.class}).newInstance("4", 4);
-//
-//                Object a = c.getMethod("dodawanie").invoke(o);
-//
-//                System.err.println(a);
-
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -180,31 +170,53 @@ public class Controller implements Initializable {
 
         invokeMethodButton.setOnAction(actionEvent -> {
 
-            CtClass ctClass = classesListContainer.getSelectionModel().getSelectedItem().getCtClass();
-            CtConstructor ctConstructor = constructorsListContainer.getSelectionModel().getSelectedItem().getCtConstructor();
-            CtMethod ctMethod = methodsListContainer.getSelectionModel().getSelectedItem().getCtMethod();
+            ClassWrapper classWrapper = classesListContainer.getSelectionModel().getSelectedItem();
+            ConstructorWrapper constructorWrapper = constructorsListContainer.getSelectionModel().getSelectedItem();
+            MethodWrapper methodWrapper = methodsListContainer.getSelectionModel().getSelectedItem();
 
             try {
-                Class<?> c = ctClass.getClass();
+                List<Pair<Class<?>, Object>> argsConstructor = new LinkedList<>();
+                List<Pair<Class<?>, Object>> argsMethod = new LinkedList<>();
 
-                System.err.println(Arrays.toString(ctConstructor.getParameterTypes()));
-                System.err.println(Arrays.toString(ctMethod.getParameterTypes()));
-                System.err.println(ctMethod.getReturnType());
-
-                List<Class<?>> argsConstructor = new LinkedList<>();
-                List<Class<?>> argsMethod = new LinkedList<>();
-
-                if (ctConstructor.getParameterTypes().length > 0) {
-                    argsConstructor = openArgumentsWindow("Podaj argumenty konstruktora: ", ctConstructor.getParameterTypes());
+                if (constructorWrapper.getCtConstructor().getParameterTypes().length > 0) {
+                    argsConstructor = openArgumentsWindow("Podaj argumenty konstruktora: ",
+                            constructorWrapper.getCtConstructor().getParameterTypes());
                 }
 
-                if (ctMethod.getParameterTypes().length > 0) {
-                    argsMethod = openArgumentsWindow("Podaj argumenty metody: ", ctMethod.getParameterTypes());
+                if (methodWrapper.getCtMethod().getParameterTypes().length > 0) {
+                    argsMethod = openArgumentsWindow("Podaj argumenty metody: ",
+                            methodWrapper.getCtMethod().getParameterTypes());
                 }
 
-            } catch (NotFoundException e) {
+                // Wykonaj konstruktor
+                Class<?> c = classWrapper.getCl();
+
+                Class<?>[] classes = new Class<?>[argsConstructor.size()];
+
+                for (int i = 0; i < classes.length; i++) {
+                    classes[i] = argsConstructor.get(i).getKey();
+                }
+
+                Object o = c
+                        .getDeclaredConstructor(classes)
+                        .newInstance(argsConstructor.stream().map(Pair::getValue).toArray());
+
+                // Wykonaj metodę
+                classes = new Class<?>[argsMethod.size()];
+
+                for (int i = 0; i < classes.length; i++) {
+                    classes[i] = argsMethod.get(i).getKey();
+                }
+
+                Object a = c
+                        .getMethod(methodWrapper.getCtMethod().getName(), classes)
+                        .invoke(o, argsMethod.stream().map(Pair::getValue).toArray());
+
+                System.err.println("Result of method: " + a);
+
+            } catch (Exception e) {
                 e.printStackTrace();
-                logMessage(e.getMessage());
+
             }
         });
     }
@@ -255,6 +267,10 @@ public class Controller implements Initializable {
         logLabel.setText(message);
     }
 
+    private void logException(Exception ex) {
+        logMessage(ex.getClass().getName() + ": " + ex.getMessage());
+    }
+
     private void refreshUILists(ClassWrapper classWrapper) {
         methodsList.clear();
         methodsList.setAll(classWrapper.getMethods());
@@ -263,20 +279,21 @@ public class Controller implements Initializable {
         contructorsList.setAll(classWrapper.getConstructors());
     }
 
-    private List<Class<?>> openArgumentsWindow(String title, CtClass[] ctClasses) {
+    private List<Pair<Class<?>, Object>> openArgumentsWindow(String title, CtClass[] argsClasses) {
+
+        List<TextField> inputsList = new LinkedList<>();
+        List<String> inputsTypes = new LinkedList<>();
+
         VBox vBox = new VBox();
 
         vBox.getChildren().add(new Label(title));
 
-        List<TextField> inputsList = new LinkedList<>();
-
-        for (CtClass ctClass : ctClasses) {
-
+        for (CtClass ctClass : argsClasses) {
             TextField textField = new TextField();
+            vBox.getChildren().addAll(new Label(ctClass.getName()), textField);
 
             inputsList.add(textField);
-
-            vBox.getChildren().addAll(new Label(ctClass.getName()), textField);
+            inputsTypes.add(ctClass.getName());
         }
 
         Button button = new Button("Wykonaj");
@@ -286,7 +303,16 @@ public class Controller implements Initializable {
         Scene scene = new Scene(vBox);
         Stage dialog = new Stage();
 
+        List<Pair<Class<?>, Object>> argsList = new LinkedList<>();
+
         button.setOnAction(actionEvent -> {
+            for (int i = 0; i < argsClasses.length; i++) {
+                String inputText = inputsList.get(i).getText().trim();
+                String argType = inputsTypes.get(i);
+
+                argsList.add(PrimitivesHelper.translateNameToPair(argType, inputText));
+            }
+
             dialog.close();
         });
 
@@ -296,6 +322,6 @@ public class Controller implements Initializable {
         dialog.setScene(scene);
         dialog.showAndWait();
 
-        return null;
+        return argsList;
     }
 }
