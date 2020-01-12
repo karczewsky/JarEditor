@@ -1,4 +1,4 @@
-package pl.jkarczewski.JarEditor;
+package pl.jkarczewski.JarEditor.helpers;
 
 import javassist.CtMethod;
 import javassist.Modifier;

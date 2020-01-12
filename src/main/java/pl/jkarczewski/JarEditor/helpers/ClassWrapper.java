@@ -1,4 +1,4 @@
-package pl.jkarczewski.JarEditor;
+package pl.jkarczewski.JarEditor.helpers;
 
 import javassist.*;
 
@@ -10,7 +10,7 @@ public class ClassWrapper {
     private Class<?> cl;
     private boolean isGenerated;
 
-    ClassWrapper(ClassPool cp, String name) {
+    public ClassWrapper(ClassPool cp, String name) {
         cl = null;
         isGenerated = false;
 
@@ -46,7 +46,7 @@ public class ClassWrapper {
     public List<MethodWrapper> getMethods() {
         List<MethodWrapper> list = new LinkedList<>();
 
-        for (CtMethod ctMethod : ctClass.getDeclaredMethods()) {
+        for (CtMethod ctMethod : ctClass.getMethods()) {
             list.add(new MethodWrapper(ctMethod));
         }
 

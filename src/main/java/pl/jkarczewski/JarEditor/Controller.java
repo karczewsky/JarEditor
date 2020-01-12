@@ -13,6 +13,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Pair;
 import javassist.*;
+import pl.jkarczewski.JarEditor.helpers.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,33 +43,49 @@ public class Controller implements Initializable {
     private ObservableList<ConstructorWrapper> contructorsList;
 
     @FXML
+    private ListView<ClassWrapper> parentsListContainer;
+    private ObservableList<ClassWrapper> parentsList;
+
+    @FXML
     private TextArea newMethodTextArea;
     @FXML
     private Button newMethodButton;
-
     @FXML
-    private Button generateClassButton;
+    private Button generateClassesButton;
     @FXML
     private Button invokeMethodButton;
+    @FXML
+    private Button newEmptyConstructorButton;
+    @FXML
+    private Button setParentButton;
 
     @FXML
     private Label logLabel;
 
+    @FXML
+    private Label executedMethodName;
+    @FXML
+    private Label executedMethodMemoryUsed;
+    @FXML
+    private Label executedMethodReturn;
+
     private FileChooser fileChooser;
     private File selectedFile;
     private ClassPool classPool;
+    private boolean errorFlag = false;
+    private boolean classesGenerated = false;
+    private Map<ClassWrapper, ClassWrapper> parentsChildrenMap = new HashMap<>();
+
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         // DEVELOPMENT CHANGES
         jarChoseField.setText(getClass().getResource("/kalkulator.jar").getFile());
-        newMethodTextArea.setText("public void test() { System.out.println(\"New method printing stuff\"); }");
+        newMethodTextArea.setText("public void test() { \n\tSystem.out.println(\"New method printing stuff\");\n }");
         // END OF DEVELOPMENT CHANGES
-        newMethodButton.setDisable(true);
-        invokeMethodButton.setDisable(true);
-        generateClassButton.setDisable(true);
-
+        refreshButtons();
         initUIElements();
+        jarUIState(false);
 
         jarChoseButton.setOnAction(actionEvent -> {
             Node source = (Node) actionEvent.getSource();
@@ -98,22 +115,27 @@ public class Controller implements Initializable {
                 Iterator<JarEntry> it = jarFile.entries().asIterator();
 
                 classesList.clear();
+                parentsList.clear();
                 while (it.hasNext()) {
                     JarEntry jarEntry = it.next();
                     String str = jarEntry.getRealName();
 
-                    // Check only .class files
                     if (str.endsWith(".class")) {
                         str = str.replace("/", ".");
                         str = str.replace(".class", "");
 
                         ClassWrapper classWrapper = new ClassWrapper(classPool, str);
                         classesList.add(classWrapper);
+                        parentsList.add(classWrapper);
                     }
                 }
+
+                jarUIState(true);
+                refreshButtons();
+
             } catch (NotFoundException | IOException e) {
                 e.printStackTrace();
-                logMessage(e.getMessage());
+                logException(e);
             }
         });
 
@@ -125,11 +147,15 @@ public class Controller implements Initializable {
         );
 
         methodsListContainer.getSelectionModel().selectedItemProperty().addListener(
-                ((observable, oldValue, newValue) -> refreshButtons())
+                ((observable -> refreshButtons()))
         );
 
         constructorsListContainer.getSelectionModel().selectedItemProperty().addListener(
-                ((observable, oldValue, newValue) -> refreshButtons())
+                ((observable -> refreshButtons()))
+        );
+
+        parentsListContainer.getSelectionModel().selectedItemProperty().addListener(
+                ((observable -> refreshButtons()))
         );
 
         newMethodButton.setOnAction(actionEvent -> {
@@ -140,32 +166,78 @@ public class Controller implements Initializable {
 
             try {
                 CtMethod ctMethod = CtNewMethod.make(newMethodText, ctClass);
-
-                CtConstructor ctConstructor = CtNewConstructor.make("public " + ctClass.getSimpleName() + "() {}", ctClass);
-
-                ctClass.addConstructor(ctConstructor);
-
                 ctClass.addMethod(ctMethod);
-
             } catch (Exception e) {
                 e.printStackTrace();
-                logMessage(e.toString());
+                logException(e);
             }
 
             refreshUILists(classWrapper);
-
         });
 
-        generateClassButton.setOnAction(actionEvent -> {
+        newEmptyConstructorButton.setOnAction(actionEvent -> {
             ClassWrapper classWrapper = classesListContainer.getSelectionModel().getSelectedItem();
+            CtClass ctClass = classWrapper.getCtClass();
+
             try {
-                classWrapper.generateClass();
-            } catch (CannotCompileException e) {
+                CtConstructor ctConstructor = CtNewConstructor.make("public " + ctClass.getSimpleName() + "() {}", ctClass);
+                ctClass.addConstructor(ctConstructor);
+            } catch (Exception e) {
                 e.printStackTrace();
-                logMessage(e.toString());
+                logException(e);
             }
 
+            refreshUILists(classWrapper);
+        });
+
+        generateClassesButton.setOnAction(actionEvent -> {
+
+            for (ClassWrapper classWrapper: classesList) {
+                LinkedList<ClassWrapper> listOfDependancy = new LinkedList<>();
+
+                while (parentsChildrenMap.containsKey(classWrapper)) {
+                    listOfDependancy.addFirst(classWrapper);
+                    classWrapper = parentsChildrenMap.get(classWrapper);
+                }
+                listOfDependancy.addFirst(classWrapper);
+
+                while (!listOfDependancy.isEmpty()) {
+                    try {
+                        classWrapper = listOfDependancy.removeFirst();
+
+                        if (!classWrapper.getIsGenerated()) {
+                            classWrapper.generateClass();
+                        }
+                    } catch (CannotCompileException e) {
+                        e.printStackTrace();
+                        logException(e);
+                    }
+                }
+            }
+
+            classesGenerated = true;
             refreshButtons();
+        });
+
+        setParentButton.setOnAction(actionEvent -> {
+            ClassWrapper child = classesListContainer.getSelectionModel().getSelectedItem();
+            ClassWrapper parent = parentsListContainer.getSelectionModel().getSelectedItem();
+
+            if (child == parent) {
+                logMessage("Dziecko nie moze byc swoim rodzicem!");
+                return;
+            }
+
+            try {
+                child.getCtClass().setSuperclass(parent.getCtClass());
+                parentsChildrenMap.put(child, parent);
+            } catch (CannotCompileException e) {
+                e.printStackTrace();
+                logException(e);
+            }
+
+            logMessage("Ustawiono rodzica: " + parent);
+            refreshUILists(child);
         });
 
         invokeMethodButton.setOnAction(actionEvent -> {
@@ -178,15 +250,23 @@ public class Controller implements Initializable {
                 List<Pair<Class<?>, Object>> argsConstructor = new LinkedList<>();
                 List<Pair<Class<?>, Object>> argsMethod = new LinkedList<>();
 
+                errorFlag = false;
+
                 if (constructorWrapper.getCtConstructor().getParameterTypes().length > 0) {
                     argsConstructor = openArgumentsWindow("Podaj argumenty konstruktora: ",
                             constructorWrapper.getCtConstructor().getParameterTypes());
                 }
 
+                if (errorFlag)
+                    return;
+
                 if (methodWrapper.getCtMethod().getParameterTypes().length > 0) {
                     argsMethod = openArgumentsWindow("Podaj argumenty metody: ",
                             methodWrapper.getCtMethod().getParameterTypes());
                 }
+
+                if (errorFlag)
+                    return;
 
                 // Wykonaj konstruktor
                 Class<?> c = classWrapper.getCl();
@@ -198,7 +278,7 @@ public class Controller implements Initializable {
                 }
 
                 Object o = c
-                        .getDeclaredConstructor(classes)
+                        .getConstructor(classes)
                         .newInstance(argsConstructor.stream().map(Pair::getValue).toArray());
 
                 // Wykonaj metodę
@@ -208,39 +288,55 @@ public class Controller implements Initializable {
                     classes[i] = argsMethod.get(i).getKey();
                 }
 
+                Runtime runtime = Runtime.getRuntime();
+                runtime.gc();
+                long usedMemoryBefore = runtime.totalMemory() - runtime.freeMemory();
+
                 Object a = c
                         .getMethod(methodWrapper.getCtMethod().getName(), classes)
                         .invoke(o, argsMethod.stream().map(Pair::getValue).toArray());
 
-                System.err.println("Result of method: " + a);
+                long usedMemoryAfter = runtime.totalMemory() - runtime.freeMemory();
+
+                executedMethodName.setText(methodWrapper.toString());
+                executedMethodMemoryUsed.setText(usedMemoryAfter - usedMemoryBefore + " Bytes");
+                executedMethodReturn.setText(String.valueOf(a));
 
             } catch (Exception e) {
                 e.printStackTrace();
-
+                logException(e);
             }
         });
+
+
+    }
+
+    private void jarUIState(boolean disable) {
+        jarChoseField.setDisable(disable);
+        jarChoseButton.setDisable(disable);
+        jarChoseConfirm.setDisable(disable);
+
+        generateClassesButton.setDisable(!disable);
     }
 
     private void refreshButtons() {
-        ClassWrapper selectedClass = classesListContainer.getSelectionModel().getSelectedItem();
+        generateClassesButton.setDisable(classesGenerated);
 
-        if (selectedClass == null) {
+        boolean classNotSelected = classesListContainer.getSelectionModel().getSelectedItem() == null;
+        boolean methodNotSelected = methodsListContainer.getSelectionModel().getSelectedItem() == null;
+        boolean constructorNotSelected = constructorsListContainer.getSelectionModel().getSelectedItem() == null;
+        boolean parentNotSelected = parentsListContainer.getSelectionModel().getSelectedItems() == null;
+
+        if (classesGenerated) {
             newMethodButton.setDisable(true);
-            generateClassButton.setDisable(true);
-            invokeMethodButton.setDisable(true);
+            newEmptyConstructorButton.setDisable(true);
+            setParentButton.setDisable(true);
+            invokeMethodButton.setDisable(classNotSelected ||  methodNotSelected || constructorNotSelected);
 
-            return;
-        }
-
-        if (selectedClass.getIsGenerated()) {
-            newMethodButton.setDisable(true);
-            generateClassButton.setDisable(true);
-
-            invokeMethodButton.setDisable(methodsListContainer.getSelectionModel().getSelectedItem() == null ||
-                    constructorsListContainer.getSelectionModel().getSelectedItem() == null);
         } else {
-            newMethodButton.setDisable(false);
-            generateClassButton.setDisable(false);
+            newMethodButton.setDisable(classNotSelected);
+            newEmptyConstructorButton.setDisable(classNotSelected);
+            setParentButton.setDisable(classNotSelected || parentNotSelected);
             invokeMethodButton.setDisable(true);
         }
     }
@@ -261,6 +357,9 @@ public class Controller implements Initializable {
 
         contructorsList = FXCollections.observableArrayList();
         constructorsListContainer.setItems(contructorsList);
+
+        parentsList = FXCollections.observableArrayList();
+        parentsListContainer.setItems(parentsList);
     }
 
     private void logMessage(String message) {
@@ -310,7 +409,14 @@ public class Controller implements Initializable {
                 String inputText = inputsList.get(i).getText().trim();
                 String argType = inputsTypes.get(i);
 
-                argsList.add(PrimitivesHelper.translateNameToPair(argType, inputText));
+                try {
+                    argsList.add(PrimitivesHelper.translateNameToPair(argType, inputText));
+                } catch (Exception e) {
+                    dialog.close();
+                    logException(e);
+                    e.printStackTrace();
+                    errorFlag = true;
+                }
             }
 
             dialog.close();
